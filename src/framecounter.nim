@@ -1,3 +1,4 @@
+import std/[monotimes]
 import macros
 
 
@@ -11,9 +12,22 @@ type
     frame*: int
     frameProcs*: seq[proc()]
     oneShots*: seq[OneShot]
+    last*: MonoTime
+    fps*: int
 
   RunKind* = enum
     rEvery, rAfter
+
+var frameReset* = 60
+
+proc fps*(frames: int, dt: float32 = 0f32): int =
+  # Calculate frames per second.
+  (((1 / frames) - dt) * 1000).int
+
+
+template ControlFlow*(f: var FrameCounter, dt: float32) =
+  if (getMonoTime() - f.last).inMilliseconds < fps(f.fps, dt):
+    return
 
 proc tick*(f: var FrameCounter) =
   for pr in f.frameProcs:
@@ -27,8 +41,9 @@ proc tick*(f: var FrameCounter) =
       f.oneShots.insert(osh, 0)
 
   f.frame += 1
-  if f.frame mod 60 == 0:
+  if f.frame mod frameReset == 0:
     f.frame = 1
+  f.last = getMonoTime()
 
 macro run*(f: FrameCounter, rk: static[RunKind], frames: int, body: untyped): untyped =
   # Create callbacks to run after/every frames.
@@ -46,6 +61,3 @@ macro run*(f: FrameCounter, rk: static[RunKind], frames: int, body: untyped): un
         procd: theProc
       )
 
-proc fps*(frames: int, dt: float32 = 0f32): int =
-  # Calculate frames per second.
-  (((1 / frames) - dt) * 1000).int
