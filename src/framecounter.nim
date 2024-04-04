@@ -5,11 +5,11 @@ import macros
 type
   OneShot* = object
     procd*: proc()
-    frame*: int
-    target*: int
+    frame*: uint
+    target*: uint
 
   FrameCounter* = object
-    frame*: int
+    frame*: uint
     frameProcs*: seq[proc()]
     oneShots*: seq[OneShot]
     last*: MonoTime
@@ -18,7 +18,7 @@ type
   RunKind* = enum
     rEvery, rAfter
 
-var frameReset* = 60
+var frameReset* = 60u32
 
 proc fps*(frames: int, dt: float32 = 0f32): int =
   # Calculate frames per second.
@@ -41,8 +41,6 @@ proc tick*(f: var FrameCounter) =
       f.oneShots.insert(osh, 0)
 
   f.frame += 1
-  if f.frame mod frameReset == 0:
-    f.frame = 1
   f.last = getMonoTime()
 
 macro run*(f: FrameCounter, rk: static[RunKind], frames: int, body: untyped): untyped =
