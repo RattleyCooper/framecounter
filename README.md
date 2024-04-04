@@ -3,7 +3,7 @@
 
 ## Install
 
-`nimble install `
+`nimble install https://github.com/RattleyCooper/framecounter`
 
 ## Example
 
