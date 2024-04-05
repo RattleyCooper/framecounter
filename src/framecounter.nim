@@ -3,20 +3,21 @@ import macros
 
 
 type
-  OneShot* = object
-    procd*: proc()
+  OneShot* = ref object
+    body*: proc()
     frame*: uint
+    target*: uint
+
+  MultiShot* = ref object
+    body*: proc()
     target*: uint
 
   FrameCounter* = object
     frame*: uint
-    frameProcs*: seq[proc()]
+    frameProcs*: seq[MultiShot]
     oneShots*: seq[OneShot]
     last*: MonoTime
     fps*: int
-
-  RunKind* = enum
-    rEvery, rAfter
 
 proc fps*(frames: int, dt: float32 = 0f32): int =
   # Calculate frames per second.
@@ -27,12 +28,16 @@ template ControlFlow*(f: var FrameCounter, dt: float32) =
     return
 
 proc tick*(f: var FrameCounter) =
-  for pr in f.frameProcs:
-    pr()
+  # MultiShots - every
+  for ms in f.frameProcs:
+    if f.frame mod ms.target == 0:
+      ms.body()
+
+  # OneShots - after
   for i in 0..f.oneShots.high:
     var osh = f.oneShots.pop()
     if osh.frame > osh.target:
-      osh.procd()
+      osh.body()
     else:
       osh.frame += 1
       f.oneShots.insert(osh, 0)
@@ -40,19 +45,40 @@ proc tick*(f: var FrameCounter) =
   f.frame += 1
   f.last = getMonoTime()
 
-macro run*(f: FrameCounter, rk: static[RunKind], frames: int, body: untyped): untyped =
-  # Create callbacks to run after/every frames.
-  if rk == rEvery:
-    result = quote do:
-      `f`.frameProcs.add do():
-        if `f`.frame mod `frames` == 0:
-          `body`
-  elif rk == rAfter:
-    result = quote do:
-      let theProc = proc() =
-        `body`
-      `f`.oneShots.add OneShot(
-        frame: 0, target: `frames`,
-        procd: theProc
-      )
+proc after*(frames: int, body: proc()): OneShot =
+  OneShot(
+    target: frames.uint,
+    frame: 0,
+    body: body
+  )
 
+proc every*(frames: int, body: proc()): MultiShot =
+  MultiShot(
+    target: frames.uint,
+    body: body
+  )
+
+proc run*(f: var FrameCounter, a: OneShot) =
+  f.oneShots.add a
+  # quote do:
+  #   `f`.oneShots.add `a`
+
+macro run*(f: var FrameCounter, e: MultiShot): untyped =
+  quote do:
+    `f`.frameProcs.add `e`
+
+if isMainModule:
+  var fc = FrameCounter(fps: 60)
+  fc.run after(100) do():
+    echo "hello"
+
+  var c = 0
+  fc.run every(30) do():
+    echo "repeating"
+    if c == 10:
+      quit(QuitSuccess)
+    c += 1
+    echo c
+
+  while true:
+    fc.tick()
