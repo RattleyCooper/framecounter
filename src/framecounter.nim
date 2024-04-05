@@ -1,5 +1,4 @@
 import std/[monotimes]
-import macros
 
 
 type
@@ -60,12 +59,9 @@ proc every*(frames: int, body: proc()): MultiShot =
 
 proc run*(f: var FrameCounter, a: OneShot) =
   f.oneShots.add a
-  # quote do:
-  #   `f`.oneShots.add `a`
 
-macro run*(f: var FrameCounter, e: MultiShot): untyped =
-  quote do:
-    `f`.frameProcs.add `e`
+proc run*(f: var FrameCounter, e: MultiShot) =
+  f.frameProcs.add e
 
 if isMainModule:
   var fc = FrameCounter(fps: 60)
