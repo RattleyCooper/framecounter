@@ -13,11 +13,11 @@ import framecounter
 
 var fc = FrameCounter(fps:30)
 
-fc.run(rAfter, 30):
+fc.run after(30) do():
   echo "30 frames have passed!"
 
 var frameCount = 0
-fc.run(rEvery, 1):
+fc.run every(1) do:
   frameCount += 1
   echo "on frame ", $frameCount
 
