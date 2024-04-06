@@ -1,5 +1,6 @@
-import std/[monotimes]
+import std/[monotimes, times]
 
+export times
 
 type
   OneShot* = ref object
