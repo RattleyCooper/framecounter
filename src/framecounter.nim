@@ -27,7 +27,10 @@ template ControlFlow*(f: var FrameCounter, dt: float32) =
   if (getMonoTime() - f.last).inMilliseconds < fps(f.fps, dt):
     return
 
-proc tick*(f: var FrameCounter) =
+proc tick*(f: var FrameCounter, dt: float32, controlFlow: bool = true) =
+  if controlFlow:
+    f.ControlFlow(dt)
+
   # MultiShots - every
   for ms in f.frameProcs:
     if f.frame mod ms.target == 0:
@@ -77,5 +80,6 @@ if isMainModule:
     c += 1
     echo c
 
+  var delta: float32 = 0.0
   while true:
-    fc.tick()
+    fc.tick(delta)
