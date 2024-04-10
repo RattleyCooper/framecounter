@@ -3,19 +3,21 @@ import std/[monotimes, times]
 export times
 
 type
-  OneShot* = ref object
-    body*: proc()
+  OneShot*[T] = ref object
+    body*: proc(thing: var T)
     frame*: uint
     target*: uint
+    thing*: T
 
-  MultiShot* = ref object
-    body*: proc()
+  MultiShot*[T] = ref object
+    body*: proc(thing: var T)
     target*: uint
+    thing*: T
 
-  FrameCounter* = object
+  FrameCounter*[T] = ref object
     frame*: uint
-    frameProcs*: seq[MultiShot]
-    oneShots*: seq[OneShot]
+    frameProcs*: seq[MultiShot[T]]
+    oneShots*: seq[OneShot[T]]
     last*: MonoTime
     fps*: int
 
@@ -34,13 +36,13 @@ proc tick*(f: var FrameCounter, dt: float32, controlFlow: bool = true) =
   # MultiShots - every
   for ms in f.frameProcs:
     if f.frame mod ms.target == 0:
-      ms.body()
+      ms.body(ms.thing)
 
   # OneShots - after
   for i in 0..f.oneShots.high:
     var osh = f.oneShots.pop()
     if osh.frame > osh.target:
-      osh.body()
+      osh.body(osh.thing)
     else:
       osh.frame += 1
       f.oneShots.insert(osh, 0)
@@ -48,17 +50,19 @@ proc tick*(f: var FrameCounter, dt: float32, controlFlow: bool = true) =
   f.frame += 1
   f.last = getMonoTime()
 
-proc after*(frames: int, body: proc()): OneShot =
-  OneShot(
+proc after*[T](thing: var T, frames: int, body: proc(thing: var T)): OneShot[T] =
+  OneShot[T](
     target: frames.uint,
     frame: 0,
-    body: body
+    body: body,
+    thing: thing
   )
 
-proc every*(frames: int, body: proc()): MultiShot =
-  MultiShot(
+proc every*[T](thing: var T, frames: int, body: proc(thing: var T)): MultiShot[T] =
+  MultiShot[T](
     target: frames.uint,
-    body: body
+    body: body,
+    thing: thing
   )
 
 proc run*(f: var FrameCounter, a: OneShot) =
@@ -68,17 +72,26 @@ proc run*(f: var FrameCounter, e: MultiShot) =
   f.frameProcs.add e
 
 if isMainModule:
-  var fc = FrameCounter(fps: 60)
-  fc.run after(100) do():
-    echo "hello"
+  type 
+    Cat = ref object
+      name: string
+      clock: FrameCounter[Cat]
 
+  var scrubs = Cat(name: "Scrubs")
+  var fc = FrameCounter[scrubs](fps: 60)
+  
+  fc.run scrubs.after(1) do(c: var Cat):
+    c.name = "bobby"
+
+  echo scrubs.name
   var c = 0
-  fc.run every(30) do():
+  fc.run scrubs.every(30) do(sc: var Cat):
     echo "repeating"
     if c == 10:
       quit(QuitSuccess)
     c += 1
     echo c
+    echo scrubs.name
 
   var delta: float32 = 0.0
   while true:
