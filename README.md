@@ -11,26 +11,30 @@
 import framecounter
 
 
-var fc = FrameCounter(fps:30)
+type 
+  Cat = ref object
+    name: string
 
-fc.run after(30) do():
-  echo "30 frames have passed!"
+var scrubs = Cat(name: "Scrubs")
+var cat = FrameCounter[Cat](fps: 60)
 
-var frameCount = 0
-fc.run every(1) do:
-  frameCount += 1
-  echo "on frame ", $frameCount
+cat.run scrubs.after(60) do(c: var Cat):
+  c.name = "bobby"
 
+var c = 0
+cat.run scrubs.every(30) do(sc: var Cat):
+  echo "repeating"
+  if c == 10:
+    quit(QuitSuccess)
+  c += 1
+  echo c
+  echo scrubs.name
+
+echo scrubs.name
 var dt: float32 
 # assume our delta time is being updated.
 while true:
   # Do stuff like detecting inputs
   
-  # Inserts control flow statements to limit FPS!
-  # Everything after this line is FPS limited.
-  fc.ControlFlow(dt)
-
-  # Do stuff here.
-
-  fc.tick() # don't forget to tick.
+  cat.tick() # tick frame counter.
 ```
