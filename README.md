@@ -44,5 +44,5 @@ var dt: float32
 while true:
   # Do stuff like detecting inputs
   
-  cat.tick() # tick frame counter.
+  cats.tick() # tick frame counter.
 ```
