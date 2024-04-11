@@ -79,8 +79,9 @@ if isMainModule:
 
   var scrubs = Cat(name: "Scrubs")
   var fc = FrameCounter[scrubs](fps: 60)
+  scrubs.clock = fc
   
-  fc.run scrubs.after(1) do(c: var Cat):
+  scrubs.clock.run scrubs.after(60) do(c: var Cat):
     c.name = "bobby"
 
   echo scrubs.name
@@ -91,7 +92,7 @@ if isMainModule:
       quit(QuitSuccess)
     c += 1
     echo c
-    echo scrubs.name
+    echo sc.name
 
   var delta: float32 = 0.0
   while true:
