@@ -20,7 +20,7 @@ type
 
 proc frameTime*(frames: int): int =
   # Calculate frames per second.
-  ((1 / frames) * 1000).int
+  ((1 div frames) * 1000)
 
 template ControlFlow*(f: var FrameCounter) =
   if (getMonoTime() - f.last).inMilliseconds < frameTime(f.fps):
