@@ -39,14 +39,14 @@ proc tick*(f: var FrameCounter, controlFlow: bool = true) =
   var c = 0
   for i in 0..f.oneShots.high:
     var osh = f.oneShots[c]
-    if osh.frame > osh.target:
+    if osh.frame >= osh.target:
       f.oneShots[c].body()
       f.oneShots.del(c)
     else:
       f.oneShots[c].frame += 1
       c += 1
 
-  if f.frame.int > f.fps:
+  if f.frame.int > int.high - 2:
     f.frame = 1
   else:
     f.frame += 1
@@ -70,6 +70,16 @@ proc run*(f: var FrameCounter, a: OneShot) =
 
 proc run*(f: var FrameCounter, e: MultiShot) =
   f.frameProcs.add e
+
+proc newFrameCounter*(fps: int): FrameCounter =
+  var f: FrameCounter
+  f.new()
+  f.fps = fps
+  f.frame = 0.uint
+  f.frameProcs = newSeq[MultiShot]()
+  f.oneShots = newSeq[OneShot]()
+  f.last = getMonoTime()
+  return f
 
 if isMainModule:
   type 
