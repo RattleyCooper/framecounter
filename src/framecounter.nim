@@ -85,22 +85,47 @@ if isMainModule:
   type 
     Cat = ref object
       name: string
-
-  var scrubs = Cat(name: "Scrubs")
-  var clock = FrameCounter(fps: 60)
+      age: int
   
-  clock.run after(60) do():
-    scrubs.name = "bobby"
-    echo "name changed"
+  proc newCat(name: string): Cat =
+    # Create a new cat.
+    result.new()
+    result.name = name
+    result.age = 1
 
+  var clock = FrameCounter(fps: 60)
+  var scrubs = newCat("Scrubs")
+  var frank = newCat("Frank")
+
+  # Closure will capture `c`, `scrubs`, and `frank`, 
+  # for use in the closure.
+  # At 60fps, every(60) means this runs once per second.
   var c = 0
-  clock.run every(30) do():
+  clock.run every(60) do():
     if c == 10:
       quit(QuitSuccess)
     c += 1
-    echo c
+    echo "C: ", c
+    echo scrubs.age
     echo scrubs.name
+    echo frank.age
+    echo frank.name
     echo ""
+
+
+  proc doStuff(cat: Cat) =
+    # Create a closure inside a proc for scheduling code
+    # on multiple objects.
+    clock.run every(60) do():
+      cat.age += 1
+    # After 3 seconds (180 frames at 60fps), rename the cat
+    clock.run after(180) do():
+      cat.name = "Mr. " & cat.name
+      echo cat.name, " got a new name!"
+
+  scrubs.doStuff()
+  frank.doStuff()
 
   while true:
     clock.tick()
+  
