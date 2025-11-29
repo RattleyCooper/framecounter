@@ -31,7 +31,7 @@ Game timing often gets messy:
 You just tell it when and what to run.
 
 ## 📦 Install
-nimble install https://github.com/RattleyCooper/framecounter
+`nimble install https://github.com/RattleyCooper/framecounter`
 
 ## 🧠 How Closures Work Here (Important!)
 
