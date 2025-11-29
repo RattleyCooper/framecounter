@@ -123,39 +123,31 @@ proc cancel*(f: FrameCounter, ids: var seq[int]) =
   ids.setLen(0)
 
 proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot): int =
-  let id = f.nextId
-  f.run every(1) do():
+  let id = f.schedule every(1) do():
     if cond():
       m.id = f.genId()
       f.frameProcs.add m
-      f.cancel(id)
   id
 
 proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, o: OneShot): int =
-  let id = f.nextId
-  f.run every(1) do():
+  let id = f.schedule every(1) do():
     if cond():
       o.id = f.genId()
       f.oneShots.add o
-      f.cancel(id)
   id
 
 template watch*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
-  let id = f.nextId
-  f.run every(1) do():
+  let id = f.schedule every(1) do():
     if (`cond`):
       m.id = f.genId()
       f.frameProcs.add m
-      f.cancel(id)
   id
 
 template watch*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
-  let id = f.nextId
-  f.run every(1) do():
+  let id = f.schedule every(1) do():
     if (`cond`):
       o.id = f.genId()
       f.oneShots.add o
-      f.cancel(id)
   id
 
 proc `when`*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot) =
