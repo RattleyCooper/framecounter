@@ -149,8 +149,9 @@ proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, o: OneShot): int =
   id
 
 template watch*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
+  # Waits until condition is true before scheduling multishot. Cancels
+  # multishot if the condition isn't true before multishot is called.
   var triggered = false
-  let id = f.nextId
   f.run every(1) do():
     if (`cond`) and not triggered:
       m.id = f.genId()
@@ -159,22 +160,24 @@ template watch*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
     elif not (`cond`) and triggered:
       f.cancel(m.id)
       triggered = false
-  id
 
 template watch*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
+  # Waits until condition is true before scheduling oneshot. Cancels 
+  # oneshot if the condition isn't true before the oneshot is 
+  # called.
   var triggered = false
-  let id = f.nextId
   f.run every(1) do():
     if (`cond`) and not triggered:
       o.id = f.genId()
-      f.frameProcs.add o
+      f.oneShots.add o
       triggered = true
     elif not (`cond`) and triggered:
       f.cancel(o.id)
       triggered = false
-  id
 
 proc `when`*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot) =
+  # Triggers multishot when the proc evaluates to true. Multishot persists
+  # unless canceled explicitly.  
   let id = f.nextId
   f.run every(1) do():
     if cond():
@@ -183,6 +186,8 @@ proc `when`*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot) =
       f.cancel(id)
 
 proc `when`*(f: FrameCounter, cond: proc(): bool {.closure.}, o: OneShot) =
+  # Triggers oneshot when the proc evaluates to true. Since oneshots terminate
+  # themselves, no canceling is required.
   let id = f.nextId
   f.run every(1) do():
     if cond():
@@ -191,6 +196,8 @@ proc `when`*(f: FrameCounter, cond: proc(): bool {.closure.}, o: OneShot) =
       f.cancel(id)
 
 template `when`*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
+  # Triggers multishot when the condition is met. Multishot persists
+  # unless canceled explicitly.
   let id = f.nextId
   f.run every(1) do():
     if (`cond`):
@@ -199,6 +206,8 @@ template `when`*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
       f.cancel(id)
 
 template `when`*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
+  # Triggers oneshot when the condition is met. Since oneshots terminate
+  # themselves, no canceling is required.
   let id = f.nextId
   f.run every(1) do():
     if (`cond`):
@@ -277,8 +286,20 @@ if isMainModule:
   scrubs.tasks.add clock.schedule every(60) do():
     scrubs.age += 1
 
-  clock.when scrubs.age > 5, after(60) do():
-    echo "Scrubs is old!"
+  # Our next watcher can only be canceled by determining
+  # The next 2 framecounter ids and canceling explicitely
+  var watcherId = clock.nextId
+  var watcherCbId = clock.nextId + 1
+  clock.watch scrubs.age < 10, every(60) do():
+    echo "Scrubs is less than 10"
+
+  # Our when trigger will auto-cancel itself after the
+  # condition is met
+  clock.when scrubs.age >= 11, after(1) do():
+    echo "Scrubs is old! Changing age!"
+    scrubs.age = 6
+    clock.cancel(watcherId)
+    clock.cancel(watcherCbId)
 
   while true:
     clock.tick()
