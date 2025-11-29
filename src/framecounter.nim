@@ -123,31 +123,55 @@ proc cancel*(f: FrameCounter, ids: var seq[int]) =
   ids.setLen(0)
 
 proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot): int =
-  let id = f.schedule every(1) do():
-    if cond():
+  var triggered = false
+  let id = f.nextId
+  f.run every(1) do():
+    if cond() and not triggered:
       m.id = f.genId()
       f.frameProcs.add m
+      triggered = true
+    elif not cond() and triggered:
+      f.cancel(m.id)
+      triggered = false
   id
 
 proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, o: OneShot): int =
-  let id = f.schedule every(1) do():
-    if cond():
+  var triggered = false
+  let id = f.nextId
+  f.run every(1) do():
+    if cond() and not triggered:
       o.id = f.genId()
       f.oneShots.add o
+      triggered = true
+    elif not cond() and triggered:
+      f.cancel(o.id)
+      triggered = false
   id
 
 template watch*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
-  let id = f.schedule every(1) do():
-    if (`cond`):
+  var triggered = false
+  let id = f.nextId
+  f.run every(1) do():
+    if (`cond`) and not triggered:
       m.id = f.genId()
       f.frameProcs.add m
+      triggered = true
+    elif not (`cond`) and triggered:
+      f.cancel(m.id)
+      triggered = false
   id
 
 template watch*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
-  let id = f.schedule every(1) do():
-    if (`cond`):
+  var triggered = false
+  let id = f.nextId
+  f.run every(1) do():
+    if (`cond`) and not triggered:
       o.id = f.genId()
-      f.oneShots.add o
+      f.frameProcs.add o
+      triggered = true
+    elif not (`cond`) and triggered:
+      f.cancel(o.id)
+      triggered = false
   id
 
 proc `when`*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot) =
