@@ -78,9 +78,7 @@ var clock = FrameCounter(fps: 60)
 var scrubs = newCat("Scrubs")
 var shadow = newCat("Shadow")
 
-# Closure will capture `c`, `scrubs`, and `shadow`, 
-# for use in the closure.
-# At 60fps, every(60) means this runs once per second.
+# Closure will capture `c`, `scrubs`, and `shadow` for use in the closure. At 60fps, every(60) means this runs once per second.
 var c = 0
 clock.run every(60) do():
   if c == 10:
@@ -95,8 +93,7 @@ clock.run every(60) do():
 
 
 proc doStuff(cat: Cat) =
-  # Create a closure inside a proc for scheduling code
-  # on multiple objects.
+  # Create a closure inside a proc for scheduling code on multiple objects.
   clock.run every(60) do():
     cat.age += 1
   # After 3 seconds (180 frames at 60fps), rename the cat
