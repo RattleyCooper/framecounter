@@ -119,7 +119,8 @@ proc schedule*(f: ReacTick, e: MultiShot): int =
 proc cancel*(f: ReacTick, id: int) =
   # Removes closures from the reactick.
   # Remove from MultiShots
-  echo "cancel called with id: ", id
+  when defined(debug):
+    echo "cancel called with id: ", id
   for i in countdown(f.multiShots.high, 0):
     if f.multiShots[i].id == id:
       f.multiShots.delete(i)
@@ -138,7 +139,8 @@ proc cancel*(f: ReacTick, ids: var seq[int]) =
   ids.setLen(0)
 
 template cancel*(f: ReacTick) =
-  echo "Canceling ", watcherId, " and ", cbId
+  when defined(debug):
+    echo "Canceling ", watcherId, " and ", cbId
   f.cancel(watcherId)
   f.cancel(cbId)
 
