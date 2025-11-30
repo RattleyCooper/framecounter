@@ -28,8 +28,8 @@ framecounter makes reactive temporal logic simple. Here's a simple example.
 
 If a player is in water, but hasn't learned to swim, they should take water damage
 every second (assuming 60fps framecounter). The following code is all you need 
-to toggle water damage on a player that's currently in water. Once they learn
-to swim, this watcher and the associated callback will no longer be checked.
+to toggle water damage on a player that's currently in water. Player enters water, they take damage. Player exits water and they stop taking damage. Once they learn
+to swim, this watcher and the associated callback will no longer be checked and the player will no longer take damage in water.
 
 ```nim
 # More on `clock.cancelable` and `watch` later
