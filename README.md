@@ -1,8 +1,8 @@
-# ⏱️ framecounter
+# ⏱️ ReacTick
 
 Deterministic frame-based scheduling for games, AI, and simulations.
 
-FrameCounter is a tiny, fast, deterministic scheduler for running closures every `N` frames or after `N` frames, with *reactive scheduling conditions* that execute code when conditions are met.
+ReacTick is a tiny, fast, deterministic scheduler for running closures every `N` frames or after `N` frames, with *reactive scheduling conditions* that execute code when conditions are met.
 
 It gives you:
 
@@ -24,10 +24,10 @@ Perfect for:
 * Procedural encounters
 * Anything that should happen later, periodically, or based on conditions
 
-framecounter makes reactive temporal logic simple. Here's a simple example. 
+ReacTick makes reactive temporal logic simple. Here's a simple example. 
 
 If a player is in water, but hasn't learned to swim, they should take water damage
-every second (assuming 60fps framecounter). The following code is all you need 
+every second (assuming 60fps ReacTick). The following code is all you need 
 to toggle water damage on a player that's currently in water. Player enters water, they take damage. Player exits water and they stop taking damage. Once they learn
 to swim, this watcher and the associated callback will no longer be checked and the player will no longer take damage in water.
 
@@ -53,7 +53,7 @@ Game timing often gets messy:
 * Update order bugs
 * Losing track of cooldowns or “run this later” logic
 
-`framecounter` solves this with:
+`ReacTick` solves this with:
 
 ✔️ Clean declarative scheduling
 
@@ -70,13 +70,13 @@ Game timing often gets messy:
 You just tell it *when* and *what* to run.
 
 ## 📦 Install
-`nimble install https://github.com/RattleyCooper/framecounter`
+`nimble install https://github.com/RattleyCooper/ReacTick`
 
 ## 🚀 Quick Start
 ```nim
-import framecounter
+import reactick
 
-var clock = FrameCounter(fps: 60)
+var clock = ReacTick(fps: 60)
 
 clock.run every(60) do():  # every 1 second at 60fps
   echo "One second passed!"
@@ -182,7 +182,7 @@ If you don't cancel the task, the closure will still run and try to heal a dead 
 Imagine we schedule a name change for a `cat`, but we delete the `cat` variable before the schedule fires.
 
 ```nim
-import framecounter
+import reactick
 
 type Cat = ref object
   name: string
@@ -192,7 +192,7 @@ proc newCat(name: string): Cat =
   result.new()
   result.name = name
 
-var clock = FrameCounter(fps: 60)
+var clock = ReacTick(fps: 60)
 var scrubs = newCat("Scrubs")
 
 # Schedule a task for the future
@@ -230,12 +230,12 @@ type Enemy = ref object
   hp: int
   tasks: seq[int]  # Bag of all scheduled task IDs
 
-proc setupEnemy(enemy: Enemy, clock: var FrameCounter) =
+proc setupEnemy(enemy: Enemy, clock: var ReacTick) =
   # Track enemy state changes to cancel later
   enemy.tasks.add clock.schedule after(600) do():
     enemy.nextState()
 
-proc removeEnemy(enemy: Enemy, clock: var FrameCounter) =
+proc removeEnemy(enemy: Enemy, clock: var ReacTick) =
   # Cancel ALL tasks with one call and clears their task list.
   clock.cancel(enemy.tasks)
   # Now safe to remove enemy from the game
@@ -243,7 +243,7 @@ proc removeEnemy(enemy: Enemy, clock: var FrameCounter) =
 
 ## 👀 Reactive Scheduling with Conditions
 
-(The most powerful part of FrameCounter)
+(The most powerful part of ReacTick)
 
 `watch condition, every(N)`
 
@@ -320,7 +320,7 @@ This is ideal for:
 
 > *Examples in readme.*
 
-`FrameCounter.cancelable` does something under the hood using macros.
+`ReacTick.cancelable` does something under the hood using macros.
 
 This code:
 
@@ -356,7 +356,7 @@ block:
 
 ## Canceling `watch`ers and their closures explicitly
 
-If you want to cancel things explicitly you can get the task ids using `FrameCounter.nextIds(amount)`. The `amount` defaults to `2` and returns a sequence containing your ids. `2` ids are needed for the `watch`er and it's associated closure. This is good for objects that may become `nil` and hold their task ids. `nextIds` must be called just before creating the `watch`er.
+If you want to cancel things explicitly you can get the task ids using `ReacTick.nextIds(amount)`. The `amount` defaults to `2` and returns a sequence containing your ids. `2` ids are needed for the `watch`er and it's associated closure. This is good for objects that may become `nil` and hold their task ids. `nextIds` must be called just before creating the `watch`er.
 
 ```nim
 # Need to get 2 ids to cancel a watcher and the associated closure.
@@ -413,7 +413,7 @@ if isMainModule:
   # The fps value defines your logical update 
   # rate. every(60) means ‘every 60 logical 
   # frames’, not real-time seconds.
-  var clock = FrameCounter(fps: 60)
+  var clock = ReacTick(fps: 60)
 
   type 
     Cat = ref object
@@ -549,11 +549,11 @@ if isMainModule:
 
 ## ⏱️ About Delta-Time (Do You Need It?)
 
-`FrameCounter` does not use delta-time internally — and it doesn’t need to.
+`ReacTick` does not use delta-time internally — and it doesn’t need to.
 
 Why?
 
-Because `framecounter` is not a game loop or physics integrator.
+Because `ReacTick` is not a game loop or physics integrator.
 
 It’s simply:
 
@@ -574,7 +574,7 @@ Your frame loop could be tied to rendering, but it doesn't have to be.
 
 ## ❌ When Delta-Time Is Not Needed
 
-* If you are only using `framecounter` as:
+* If you are only using `ReacTick` as:
 * a scheduler
 * a timed-event system
 * a frame-based sequencer
