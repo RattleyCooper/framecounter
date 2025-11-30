@@ -43,13 +43,18 @@ proc tick*(f: ReacTick, controlFlow: bool = true) =
   if controlFlow:
     f.ControlFlow()
 
+  when defined(profileTick):
+    var ranProcs = false
+    var startTime = getMonoTime()
   # MultiShots - every
   for i in 0..f.multiShots.high: # maintain execution order
     if i > f.multiShots.high:
       break
     if f.frame mod f.multiShots[i].target == 0 and f.frame != 0:
       f.multiShots[i].body()
-
+      when defined(profileTick):
+        ranProcs = true
+          
   # OneShots - after
   var c = 0
   for i in 0..f.oneShots.high: # maintain execution order
@@ -59,6 +64,8 @@ proc tick*(f: ReacTick, controlFlow: bool = true) =
     if osh.frame mod osh.target == 0 and osh.frame != 0:
       f.oneShots[c].body()
       f.oneShots.del(c)
+      when defined(profileTick):
+        ranProcs = true
     else:
       f.oneShots[c].frame += 1
       c += 1
@@ -67,6 +74,11 @@ proc tick*(f: ReacTick, controlFlow: bool = true) =
     f.frame = 1
   else:
     f.frame += 1
+
+  when defined(profileTick):
+    if ranProcs:
+      echo "Total Timeframe: ", (getMonoTime() - startTime)
+
   f.last = getMonoTime()
 
 proc after*(frames: int, body: proc() {.closure}): OneShot =
