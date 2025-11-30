@@ -34,6 +34,7 @@ to swim, this watcher and the associated callback will no longer be checked and 
 ```nim
 # More on `clock.cancelable` and `watch` later
 clock.cancelable:
+  # Player takes damage every second (60fps)
   clock.watch player.inWater, every(60) do():
     if player.canSwim:
       # Watcher/callback unscheduled here
@@ -147,6 +148,29 @@ let id = clock.schedule after(300) do():
 clock.cancel(id)
 ```
 
+`watch` Runs callback at desired framerate when condition is met.
+
+```nim
+clock.cancelable:
+  # Player takes damage every second (60fps)
+  clock.watch player.inWater, every(60) do():
+    if player.canSwim:
+      # Watcher/callback unscheduled here
+      clock.cancel()
+    else:
+      player.takeWaterDamage()
+```
+
+> Note: `watch` combined with `after` will only execute code *once* while the condition remains `true`, unlike `every` which gives you *repeating* executions *while* the condition remains `true`.
+
+`when` Runs callbacks when a condition is `true`, then self-destructs.
+
+```nim
+# Cats will learn to hunt *once* the first time they reach starving condition
+clock.when cat.hunger >= 60, after(60) do():
+  cat.learnHunting()
+```
+
 ## 🛑 Scheduling & Cancellation (Preventing Crashes)
 
 Sometimes you schedule something to happen later (e.g., "Heal player in 3 seconds"), but the entity dies before that happens.
@@ -256,6 +280,17 @@ clock.when enemy.hp <= 0, after(1) do():
   enemy.die() # presumably canceling tasks in enemy.die()
 ```
 
+| API | Runs  | Repeats? | Stops automatically? | Returns Task ID | Task Ids Needed to Cancel |
+| --- | ----- | -------- | -------------------- | --- | --- |
+| `run every(N)`| Every N frames |✔️|❌|❌| 1 |
+| `run after(N)`| Once |❌|✔️|❌| 1 |
+| `schedule every(N)` | Every N frames |✔️|❌|✔️| Use Returned |
+| `schedule after(N)` | Once  | ❌  | ✔️  |✔️| Use Returned |
+| `watch cond, every(N)` | Every N frames *while cond is true* |✔️|✔️ (until cond true again) |❌| 2 |
+| `watch cond, after(N)` | Once N frames *when cond* is true |❌|✔️ (util cond true again)|❌| 2 |
+| `when cond, after(N)`| Once |❌| ✔️ **Always self-cancels**|❌| 2 |
+
+
 ## 🔒 Cancelable Blocks
 
 Sometimes you want a whole block of watchers and tasks to be removed permanently after some condition succeeds.
@@ -283,7 +318,58 @@ This is ideal for:
 * “burn out” or “fleeing” AI
 * multi-step interactions
 
-*Examples in readme.*
+> *Examples in readme.*
+
+`FrameCounter.cancelable` does something under the hood using macros.
+
+This code:
+
+```nim
+clock.cancelable:
+  clock.watch scrubs.inWater, every(60) do :
+    if scrubs.canSwim:
+      clock.cancel()
+    elif scrubs.health <= 80:
+      scrubs.learnToSwim()
+    else:
+      scrubs.takeWaterDamage()
+```
+
+Gets transformed into this code:
+
+```nim
+block:
+  # Pulls in ids that will be used for the
+  # closures.
+  var watcherId = clock.nextId + 1
+  var cbId = clock.nextId
+  clock.watch scrubs.inWater, every(60)do :
+    if scrubs.canSwim:
+      # Uses IDs to unschedule the closures.
+      clock.cancel(watcherId)
+      clock.cancel(cbId)
+    elif scrubs.health <= 80:
+      scrubs.learnToSwim()
+    else:
+      scrubs.takeWaterDamage()
+```
+
+## Canceling `watch`ers and their closures explicitly
+
+If you want to cancel things explicitly you can get the task ids using `FrameCounter.nextIds(amount)`. The `amount` defaults to `2` and returns a sequence containing your ids. `2` ids are needed for the `watch`er and it's associated closure. This is good for objects that may become `nil` and hold their task ids. `nextIds` must be called just before creating the `watch`er.
+
+```nim
+# Need to get 2 ids to cancel a watcher and the associated closure.
+enemy.tasks.add clock.nextIds()
+clock.watch enemy.onFire, every(60) do():
+  enemy.takeFireDamage()
+
+# Remove enemy tasks before they become nil
+# to prevent accessing invalid memory.
+clock.cancel enemy.tasks
+```
+
+> This is useful when you need to manually cancel a `watch` before its condition resolves (e.g., when an entity is destroyed).
 
 ## 🧩 Patterns & Usage
 
