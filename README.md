@@ -63,7 +63,7 @@ Game timing often gets messy:
 
 ✔️ Closures that capture state automatically
 
-✔️ Cancellable tasks (Stop events when entities die)
+✔️ Cancelable tasks (Stop events when entities die)
 
 ✔️ Perfect for fixed-step game loops (Nico, SDL, OpenGL, etc.)
 
