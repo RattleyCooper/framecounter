@@ -130,6 +130,13 @@ template cancel*(f: FrameCounter) =
   f.cancel(watcherId)
   f.cancel(cbId)
 
+proc nextIds*(f: FrameCounter, amount: int = 2): seq[int] =
+  result.add f.nextId
+  var startingId = f.nextId
+  for i in 1..amount:
+    result.add startingId + 1
+    startingId += 1
+
 proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot) =
   var triggered = false
   m.id = f.genId()
