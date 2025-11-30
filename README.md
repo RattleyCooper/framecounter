@@ -2,7 +2,7 @@
 
 Deterministic frame-based scheduling for games, AI, and simulations.
 
-*FrameCounter is a tiny, fast, deterministic scheduler for running closures every N frames or after N frames, with reactive scheduling conditions.*
+FrameCounter is a tiny, fast, deterministic scheduler for running closures every `N` frames or after `N` frames, with *reactive scheduling conditions* that execute code when conditions are met.
 
 It gives you:
 
@@ -22,7 +22,25 @@ Perfect for:
 * Delayed events
 * Cutscenes & scripts
 * Procedural encounters
-* Anything that should happen later or periodically
+* Anything that should happen later, periodically, or based on conditions
+
+framecounter makes reactive temporal logic simple. Here's a simple example. 
+
+If a player is in water, but hasn't learned to swim, they should take water damage
+every second (assuming 60fps framecounter). The following code is all you need 
+to toggle water damage on a player that's currently in water. Once they learn
+to swim, this watcher and the associated callback will no longer be checked.
+
+```nim
+# More on `clock.cancelable` and `watch` later
+clock.cancelable:
+  clock.watch player.inWater, every(60) do():
+    if player.canSwim:
+      # Watcher/callback unscheduled here
+      clock.cancel()
+    else:
+      player.takeWaterDamage()
+```
 
 ## ✨ Why Use Frame-Based Scheduling?
 
