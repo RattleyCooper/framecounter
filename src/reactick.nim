@@ -13,42 +13,42 @@ type
     body*: proc() {.closure.}
     target*: uint
 
-  FrameCounter* = ref object
+  ReacTick* = ref object
     nextId*: int
     frame*: uint
-    frameProcs*: seq[MultiShot]
+    multiShots*: seq[MultiShot]
     oneShots*: seq[OneShot]
     last*: MonoTime
     fps*: int
 
-proc clear*(framecounter: FrameCounter) =
-  # Clear the closures from the framecounter.
-  framecounter.frameProcs.setLen(0)
-  framecounter.oneShots.setLen(0)
+proc clear*(reactick: ReacTick) =
+  # Clear the closures from the reactick.
+  reactick.multiShots.setLen(0)
+  reactick.oneShots.setLen(0)
 
-proc genId*(framecounter: FrameCounter): int =
+proc genId*(reactick: ReacTick): int =
   # Create an id for the next registered closure.
-  result = framecounter.nextId
-  inc framecounter.nextId
+  result = reactick.nextId
+  inc reactick.nextId
 
 proc frameTime*(frames: int): int =
   # Calculate frames per second.
   ((1 / frames) * 1000).int
 
-template ControlFlow*(f: FrameCounter) =
+template ControlFlow*(f: ReacTick) =
   if (getMonoTime() - f.last).inMilliseconds < frameTime(f.fps):
     return
 
-proc tick*(f: FrameCounter, controlFlow: bool = true) =
+proc tick*(f: ReacTick, controlFlow: bool = true) =
   if controlFlow:
     f.ControlFlow()
 
   # MultiShots - every
-  for i in 0..f.frameProcs.high: # maintain execution order
-    if i > f.frameProcs.high:
+  for i in 0..f.multiShots.high: # maintain execution order
+    if i > f.multiShots.high:
       break
-    if f.frame mod f.frameProcs[i].target == 0 and f.frame != 0:
-      f.frameProcs[i].body()
+    if f.frame mod f.multiShots[i].target == 0 and f.frame != 0:
+      f.multiShots[i].body()
 
   # OneShots - after
   var c = 0
@@ -84,33 +84,33 @@ proc every*(frames: int, body: proc() {.closure.}): MultiShot =
     id: -1
   )
 
-proc run*(f: FrameCounter, a: OneShot) =
+proc run*(f: ReacTick, a: OneShot) =
   a.id = f.genId()
   f.oneShots.add a
 
-proc run*(f: FrameCounter, e: MultiShot) =
+proc run*(f: ReacTick, e: MultiShot) =
   e.id = f.genId()
-  f.frameProcs.add e
+  f.multiShots.add e
 
-proc schedule*(f: FrameCounter, a: OneShot): int =
+proc schedule*(f: ReacTick, a: OneShot): int =
   # Same as run, but returns the id you can use to cancel the closure.
   a.id = f.genId()
   f.oneShots.add a
   a.id
 
-proc schedule*(f: FrameCounter, e: MultiShot): int =
+proc schedule*(f: ReacTick, e: MultiShot): int =
   # Same as run, but returns the id you can use to cancel the closure.
   e.id = f.genId()
-  f.frameProcs.add e
+  f.multiShots.add e
   e.id
 
-proc cancel*(f: FrameCounter, id: int) =
-  # Removes closures from the framecounter.
+proc cancel*(f: ReacTick, id: int) =
+  # Removes closures from the reactick.
   # Remove from MultiShots
   echo "cancel called with id: ", id
-  for i in countdown(f.frameProcs.high, 0):
-    if f.frameProcs[i].id == id:
-      f.frameProcs.delete(i)
+  for i in countdown(f.multiShots.high, 0):
+    if f.multiShots[i].id == id:
+      f.multiShots.delete(i)
       return
   # Remove from OneShots
   for i in countdown(f.oneShots.high, 0):
@@ -118,26 +118,26 @@ proc cancel*(f: FrameCounter, id: int) =
       f.oneShots.delete(i)
       return
 
-proc cancel*(f: FrameCounter, ids: var seq[int]) =
+proc cancel*(f: ReacTick, ids: var seq[int]) =
   ## Batch cancellation. Removes all tasks in the list and clears the list.
   ## Usage: clock.cancel(player.tasks)
   for i in countdown(ids.high, 0):
     f.cancel(ids[i])
   ids.setLen(0)
 
-template cancel*(f: FrameCounter) =
+template cancel*(f: ReacTick) =
   echo "Canceling ", watcherId, " and ", cbId
   f.cancel(watcherId)
   f.cancel(cbId)
 
-proc nextIds*(f: FrameCounter, amount: int = 2): seq[int] =
+proc nextIds*(f: ReacTick, amount: int = 2): seq[int] =
   result.add f.nextId
   var startingId = f.nextId
   for i in 1..amount:
     result.add startingId + 1
     startingId += 1
 
-template watch*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
+template watch*(f: ReacTick, cond: untyped, m: MultiShot): untyped =
   # Waits until condition is true before scheduling multishot. Cancels
   # multishot if the condition isn't true before multishot is called.
   var triggered = false
@@ -145,7 +145,7 @@ template watch*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
   f.run every(1) do():  
     if (`cond`) and not triggered:
       # echo "cbId ", cbId
-      f.frameProcs.add MultiShot(
+      f.multiShots.add MultiShot(
         target: m.target,
         body: m.body,
         id: cbId
@@ -155,7 +155,7 @@ template watch*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
       f.cancel(cbId)
       triggered = false
 
-template watch*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
+template watch*(f: ReacTick, cond: untyped, o: OneShot): untyped =
   # Waits until condition is true before scheduling oneshot. Cancels 
   # oneshot if the condition isn't true before the oneshot is 
   # called.
@@ -174,7 +174,7 @@ template watch*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
       f.cancel(cbId)
       triggered = false
 
-template `when`*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
+template `when`*(f: ReacTick, cond: untyped, m: MultiShot): untyped =
   # Triggers multishot when the condition is met. Multishot persists
   # unless canceled explicitly.
   var triggered = false
@@ -182,7 +182,7 @@ template `when`*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
   let nid = cbId + 1
   f.run every(1) do():
     if (`cond`) and not triggered:
-      f.frameProcs.add MultiShot(
+      f.multiShots.add MultiShot(
         target: m.target,
         body: m.body,
         id: cbId
@@ -192,7 +192,7 @@ template `when`*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
     #   f.cancel(nid)
     #   f.cancel(cbId)
 
-template `when`*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
+template `when`*(f: ReacTick, cond: untyped, o: OneShot): untyped =
   # Triggers oneshot when the condition is met. Since oneshots terminate
   # themselves, no canceling is required.'
   var triggered = false
@@ -211,22 +211,22 @@ template `when`*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
       f.cancel(nid)
       # f.cancel(cbId)
 
-proc newFrameCounter*(fps: int): FrameCounter =
-  var f: FrameCounter
+proc newReacTick*(fps: int): ReacTick =
+  var f: ReacTick
   f.new()
   f.fps = fps
   f.frame = 0.uint
-  f.frameProcs = newSeq[MultiShot]()
+  f.multiShots = newSeq[MultiShot]()
   f.oneShots = newSeq[OneShot]()
   f.last = getMonoTime()
   f.nextId = 1
   return f
 
-template watcherIds*(f: FrameCounter) =
+template watcherIds*(f: ReacTick) =
   var watcherId {.inject.} = f.nextId + 1
   var cbId {.inject.} = f.nextId
 
-macro cancelable*(f: FrameCounter, x: untyped): untyped =
+macro cancelable*(f: ReacTick, x: untyped): untyped =
   result = newStmtList()
   for statement in x:
     result.add quote do:
@@ -237,7 +237,7 @@ macro cancelable*(f: FrameCounter, x: untyped): untyped =
 
 # === EXAMPLE ===
 if isMainModule:
-  var clock = FrameCounter(fps: 60)
+  var clock = ReacTick(fps: 60)
 
   type 
     Cat = ref object
