@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.0.1"
+version       = "0.0.2"
 author        = "RattleyCooper"
 description   = "Schedule code to run after/every X frames."
 license       = "MIT"
