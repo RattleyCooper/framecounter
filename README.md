@@ -326,7 +326,7 @@ This code:
 
 ```nim
 clock.cancelable:
-  clock.watch scrubs.inWater, every(60) do :
+  clock.watch scrubs.inWater, every(60) do():
     if scrubs.canSwim:
       clock.cancel()
     elif scrubs.health <= 80:
