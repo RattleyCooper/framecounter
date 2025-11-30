@@ -137,28 +137,6 @@ proc nextIds*(f: FrameCounter, amount: int = 2): seq[int] =
     result.add startingId + 1
     startingId += 1
 
-proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot) =
-  var triggered = false
-  m.id = f.genId()
-  f.run every(1) do():
-    if cond() and not triggered:
-      f.frameProcs.add m
-      triggered = true
-    elif not cond() and triggered:
-      f.cancel(m.id)
-      triggered = false
-
-proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, o: OneShot) =
-  var triggered = false
-  o.id = f.genId()
-  f.run every(1) do():
-    if cond() and not triggered:
-      f.oneShots.add o
-      triggered = true
-    elif not cond() and triggered:
-      f.cancel(o.id)
-      triggered = false
-
 template watch*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
   # Waits until condition is true before scheduling multishot. Cancels
   # multishot if the condition isn't true before multishot is called.
@@ -195,26 +173,6 @@ template watch*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
     elif not (`cond`) and triggered:
       f.cancel(cbId)
       triggered = false
-
-# proc watchBlock(f: FrameCounter, cond: untyped, body: untyped)
-
-proc `when`*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot) =
-  # Triggers multishot when the proc evaluates to true. Multishot persists
-  # unless canceled explicitly.
-  m.id = f.genId()
-  f.run every(1) do():
-    if cond():
-      f.frameProcs.add m
-      f.cancel(m.id)
-
-proc `when`*(f: FrameCounter, cond: proc(): bool {.closure.}, o: OneShot) =
-  # Triggers oneshot when the proc evaluates to true. Since oneshots terminate
-  # themselves, no canceling is required.
-  o.id = f.nextId
-  f.run every(1) do():
-    if cond():
-      f.oneShots.add o
-      f.cancel(o.id)
 
 template `when`*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
   # Triggers multishot when the condition is met. Multishot persists
