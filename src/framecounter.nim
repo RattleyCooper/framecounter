@@ -1,4 +1,4 @@
-import std/[monotimes, times]
+import std/[monotimes, times, macros]
 export times
 
 type
@@ -69,17 +69,19 @@ proc tick*(f: FrameCounter, controlFlow: bool = true) =
     f.frame += 1
   f.last = getMonoTime()
 
-proc after*(frames: int, body: proc() {.closure.}): OneShot =
+proc after*(frames: int, body: proc() {.closure}): OneShot =
   OneShot(
     target: frames.uint,
     frame: 0,
-    body: body
+    body: body,
+    id: -1
   )
 
 proc every*(frames: int, body: proc() {.closure.}): MultiShot =
   MultiShot(
     target: frames.uint,
-    body: body
+    body: body,
+    id: -1
   )
 
 proc run*(f: FrameCounter, a: OneShot) =
@@ -104,15 +106,16 @@ proc schedule*(f: FrameCounter, e: MultiShot): int =
 
 proc cancel*(f: FrameCounter, id: int) =
   # Removes closures from the framecounter.
+  # Remove from MultiShots
+  echo "cancel called with id: ", id
+  for i in countdown(f.frameProcs.high, 0):
+    if f.frameProcs[i].id == id:
+      f.frameProcs.delete(i)
+      return
   # Remove from OneShots
   for i in countdown(f.oneShots.high, 0):
     if f.oneShots[i].id == id:
-      f.oneShots.del(i)
-      return
-  # Remove from MultiShots
-  for i in countdown(f.frameProcs.high, 0):
-    if f.frameProcs[i].id == id:
-      f.frameProcs.del(i)
+      f.oneShots.delete(i)
       return
 
 proc cancel*(f: FrameCounter, ids: var seq[int]) =
@@ -122,43 +125,49 @@ proc cancel*(f: FrameCounter, ids: var seq[int]) =
     f.cancel(ids[i])
   ids.setLen(0)
 
-proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot): int =
+template cancel*(f: FrameCounter) =
+  echo "Canceling ", watcherId, " and ", cbId
+  f.cancel(watcherId)
+  f.cancel(cbId)
+
+proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot) =
   var triggered = false
-  let id = f.nextId
+  m.id = f.genId()
   f.run every(1) do():
     if cond() and not triggered:
-      m.id = f.genId()
       f.frameProcs.add m
       triggered = true
     elif not cond() and triggered:
       f.cancel(m.id)
       triggered = false
-  id
 
-proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, o: OneShot): int =
+proc watch*(f: FrameCounter, cond: proc(): bool {.closure.}, o: OneShot) =
   var triggered = false
-  let id = f.nextId
+  o.id = f.genId()
   f.run every(1) do():
     if cond() and not triggered:
-      o.id = f.genId()
       f.oneShots.add o
       triggered = true
     elif not cond() and triggered:
       f.cancel(o.id)
       triggered = false
-  id
 
 template watch*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
   # Waits until condition is true before scheduling multishot. Cancels
   # multishot if the condition isn't true before multishot is called.
   var triggered = false
-  f.run every(1) do():
+  let cbId = f.genId()
+  f.run every(1) do():  
     if (`cond`) and not triggered:
-      m.id = f.genId()
-      f.frameProcs.add m
+      # echo "cbId ", cbId
+      f.frameProcs.add MultiShot(
+        target: m.target,
+        body: m.body,
+        id: cbId
+      )
       triggered = true
     elif not (`cond`) and triggered:
-      f.cancel(m.id)
+      f.cancel(cbId)
       triggered = false
 
 template watch*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
@@ -166,54 +175,76 @@ template watch*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
   # oneshot if the condition isn't true before the oneshot is 
   # called.
   var triggered = false
+  let cbId = f.genId()
   f.run every(1) do():
     if (`cond`) and not triggered:
-      o.id = f.genId()
-      f.oneShots.add o
+      f.oneShots.add OneShot(
+        target: o.target,
+        body: o.body,
+        id: cbId,
+        frame: o.frame
+      )
       triggered = true
     elif not (`cond`) and triggered:
-      f.cancel(o.id)
+      f.cancel(cbId)
       triggered = false
+
+# proc watchBlock(f: FrameCounter, cond: untyped, body: untyped)
 
 proc `when`*(f: FrameCounter, cond: proc(): bool {.closure.}, m: MultiShot) =
   # Triggers multishot when the proc evaluates to true. Multishot persists
-  # unless canceled explicitly.  
-  let id = f.nextId
+  # unless canceled explicitly.
+  m.id = f.genId()
   f.run every(1) do():
     if cond():
-      m.id = f.genId()
       f.frameProcs.add m
-      f.cancel(id)
+      f.cancel(m.id)
 
 proc `when`*(f: FrameCounter, cond: proc(): bool {.closure.}, o: OneShot) =
   # Triggers oneshot when the proc evaluates to true. Since oneshots terminate
   # themselves, no canceling is required.
-  let id = f.nextId
+  o.id = f.nextId
   f.run every(1) do():
     if cond():
-      o.id = f.genId()
       f.oneShots.add o
-      f.cancel(id)
+      f.cancel(o.id)
 
 template `when`*(f: FrameCounter, cond: untyped, m: MultiShot): untyped =
   # Triggers multishot when the condition is met. Multishot persists
   # unless canceled explicitly.
-  let id = f.nextId
+  var triggered = false
+  let cbId = f.genId()
+  let nid = cbId + 1
   f.run every(1) do():
-    if (`cond`):
-      m.id = f.genId()
-      f.frameProcs.add m
-      f.cancel(id)
+    if (`cond`) and not triggered:
+      f.frameProcs.add MultiShot(
+        target: m.target,
+        body: m.body,
+        id: cbId
+      )
+      triggered = true
+    # elif triggered:
+    #   f.cancel(nid)
+    #   f.cancel(cbId)
 
 template `when`*(f: FrameCounter, cond: untyped, o: OneShot): untyped =
   # Triggers oneshot when the condition is met. Since oneshots terminate
-  # themselves, no canceling is required.
-  let id = f.nextId
+  # themselves, no canceling is required.'
+  var triggered = false
+  let cbId = f.genId()
+  var nid = cbId + 1
   f.run every(1) do():
-    if (`cond`):
-      o.id = f.genId()
-      f.oneShots.add o
-      f.cancel(id)
+    if (`cond`) and not triggered:
+      f.oneShots.add OneShot(
+        target: o.target,
+        body: o.body,
+        id: cbId,
+        frame: o.frame
+      )
+      triggered = true
+    elif triggered:
+      f.cancel(nid)
+      # f.cancel(cbId)
 
 proc newFrameCounter*(fps: int): FrameCounter =
   var f: FrameCounter
@@ -223,84 +254,149 @@ proc newFrameCounter*(fps: int): FrameCounter =
   f.frameProcs = newSeq[MultiShot]()
   f.oneShots = newSeq[OneShot]()
   f.last = getMonoTime()
+  f.nextId = 1
   return f
 
+template watcherIds*(f: FrameCounter) =
+  var watcherId {.inject.} = f.nextId + 1
+  var cbId {.inject.} = f.nextId
+
+macro cancelable*(f: FrameCounter, x: untyped): untyped =
+  result = newStmtList()
+  for statement in x:
+    result.add quote do:
+      block:
+        `f`.watcherIds
+        `statement`
+  echo result.repr
+
+# === EXAMPLE ===
 if isMainModule:
-  var clock = FrameCounter(fps:60)
+  var clock = FrameCounter(fps: 60)
 
   type 
     Cat = ref object
       name: string
-      age: int
-      tasks: seq[int] # Our bag of tasks
-  
-  proc newCat(name: string): Cat =
-    # Create a new cat.
-    result.new()
-    result.name = name
-    result.age = 1
+      health: int
+      hunger: int
+      energy: int
+      eating: bool
+      learnedToHunt: bool   # A permanent progression flag
+      canSwim: bool
 
-  # var clock = FrameCounter(fps: 60)
+  proc newCat(name: string): Cat =
+    new result
+    result.name = name
+    result.health = 100
+    result.hunger = 50
+    result.energy = 100
+    result.eating = false
+    result.learnedToHunt = false
+    result.canSwim = false
+
+  proc feed(cat: Cat) =
+    cat.hunger = max(cat.hunger - 40, 0)
+    cat.eating = true
+    echo cat.name, " is eating. Hunger now ", cat.hunger
+
+  proc finishedEating(cat: Cat) =
+    cat.eating = false
+    echo cat.name, " finished eating."
+
+  proc nap(cat: Cat) =
+    cat.energy = min(cat.energy + 10, 100)
+    echo cat.name, " naps. Energy: ", cat.energy
+
+  proc learnHunting(cat: Cat) =
+    cat.learnedToHunt = true
+    echo cat.name, " has learned to hunt! (Permanent skill)"
+
+  proc takeWaterDamage(cat: Cat) =
+    cat.health -= 10
+    echo "Cat taking water damage! Health: ", cat.health
+
+  proc learnToSwim(cat: Cat) =
+    cat.canSwim = true
+    echo cat.name, " learned to swim!"
+
+  proc inWater(cat: Cat): bool =
+    true
+
+  # Create cats
   var scrubs = newCat("Scrubs")
   var shadow = newCat("Shadow")
 
-  # Closure will capture `c`, `scrubs`, and `shadow`, for use in the closure.
-  # At 60fps, every(60) means this runs once per second.
-  var c = 0
+  # === BASE NEEDS: These are REVERSIBLE → normal watchers ===
+
+  # Hunger gradually increases
   clock.run every(60) do():
-    if c == 5:
-      # Cancel scrubs' rapid aging
-      clock.cancel(scrubs.tasks)
-    if c == 10:
+    scrubs.hunger = min(scrubs.hunger + 1, 100)
+    shadow.hunger = min(shadow.hunger + 1, 100)
+    echo "Scrubs hunger: ", scrubs.hunger
+    echo "Shadow hunger: ", shadow.hunger
+
+  # Energy gradually decreases
+  clock.run every(120) do():
+    scrubs.energy = max(scrubs.energy - 1, 0)
+    shadow.energy = max(shadow.energy - 1, 0)
+    echo "Scrubs energy: ", scrubs.energy
+    echo "Shadow energy: ", shadow.energy
+
+  # === HUNGER RESPONSE: Reversible → NOT cancelable ===
+
+  # Meow until fed
+  clock.watch scrubs.hunger >= 70, every(90) do():
+    echo scrubs.name, " meows! Hunger: ", scrubs.hunger
+    if scrubs.hunger >= 90:
+      scrubs.feed()
+
+  clock.watch shadow.hunger >= 70, every(90) do():
+    echo shadow.name, " meows! Hunger: ", shadow.hunger
+    if shadow.hunger >= 90:
+      shadow.feed()
+
+  clock.when scrubs.eating, after(120) do():
+    scrubs.finishedEating()
+    echo "Scrubs finished eating! Scrubs hunger: ", scrubs.hunger
+
+  clock.when shadow.eating, after(120) do():
+    shadow.finishedEating()
+    echo "Shadow finished eating! Shadow hunger: ", shadow.hunger
+
+  # === ENERGY RESPONSE: Reversible → NOT cancelable ===
+
+  # Nap until fully rested
+  clock.watch scrubs.energy <= 90, every(50) do():
+    scrubs.nap()
+    echo "Scrubs energy: ", scrubs.energy
+
+  clock.watch shadow.energy <= 90, every(50) do():
+    shadow.nap()
+    echo "Shadow energy: ", shadow.energy
+
+  # === PERMANENT PROGRESSION: This IS cancelable! ===
+  clock.cancelable:
+    clock.watch scrubs.inWater, every(60) do():
+      if scrubs.canSwim:
+        clock.cancel() # removes watcher and callback entirely.
+      elif scrubs.health <= 80:
+        scrubs.learnToSwim()
+      else:
+        scrubs.takeWaterDamage()
+
+  # === PERMANENT PROGRESSION: Self-canceling! ===
+  # Cats will learn to hunt *once* the first time they reach starving condition
+  clock.when scrubs.hunger >= 60, after(60) do():
+    scrubs.learnHunting()
+  clock.when shadow.hunger >= 60, after(60) do():
+    shadow.learnHunting()
+
+  # End simulation after 20 ticks
+  var t = 0
+  clock.run every(60) do():
+    t += 1
+    if t == 120:
       quit(QuitSuccess)
-    c += 1
-    echo "C: ", c
-    echo scrubs.age
-    echo scrubs.name
-    echo shadow.age
-    echo shadow.name
-    echo ""
-
-  proc ageInc(cat: Cat) =
-    # Testable without framecounter
-    cat.age += 1
-
-  proc nameChange(cat: Cat, name: string) =
-    # Testable without framecounter
-    cat.name = name
-    echo cat.name, " got a new name!"
-
-  proc setupCat(cat: Cat) =
-    # Create a closure inside a proc for scheduling code
-    # on multiple objects.
-    clock.run every(60) do(): 
-      cat.ageInc()
-    # After 3 seconds (180 frames at 60fps), rename the cat
-    clock.run after(180) do():
-      cat.nameChange("Mr. " & cat.name)
-
-  scrubs.setupCat()
-  shadow.setupCat()
-
-  # Scrubs will age rapidly until task is canceled
-  scrubs.tasks.add clock.schedule every(60) do():
-    scrubs.age += 1
-
-  # Our next watcher can only be canceled by determining
-  # The next 2 framecounter ids and canceling explicitely
-  var watcherId = clock.nextId
-  var watcherCbId = clock.nextId + 1
-  clock.watch scrubs.age < 10, every(60) do():
-    echo "Scrubs is less than 10"
-
-  # Our when trigger will auto-cancel itself after the
-  # condition is met
-  clock.when scrubs.age >= 11, after(1) do():
-    echo "Scrubs is old! Changing age!"
-    scrubs.age = 6
-    clock.cancel(watcherId)
-    clock.cancel(watcherCbId)
 
   while true:
     clock.tick()
-  
